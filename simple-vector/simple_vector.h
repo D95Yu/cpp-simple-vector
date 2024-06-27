@@ -37,10 +37,8 @@ public:
 
     // Создаёт вектор из size элементов, инициализированных значением value
     SimpleVector(size_t size, const Type& value) 
-        : size_(size), capacity_(size) {
-        ArrayPtr<Type> temp(size);
-        std::fill(temp.Get(), temp.Get() + size, value);
-        temp.swap(simple_vector_);
+        : simple_vector_(size), size_(size), capacity_(size) {
+        std::fill(begin(), end(), value);
     }
 
     SimpleVector(size_t size, const Type&& value) 
@@ -54,10 +52,8 @@ public:
 
     // Создаёт вектор из std::initializer_list
     SimpleVector(std::initializer_list<Type> init) 
-        : size_(init.size()), capacity_(init.size()) {
-        ArrayPtr<Type> temp(init.size());
-        std::move(std::make_move_iterator(init.begin()), std::make_move_iterator(init.end()), temp.Get());
-        temp.swap(simple_vector_);
+        : simple_vector_(init.size()), size_(init.size()), capacity_(init.size()) {
+        std::copy(std::make_move_iterator(init.begin()), std::make_move_iterator(init.end()), begin());
     }
 
     SimpleVector(const SimpleVector& other) 
@@ -93,44 +89,36 @@ public:
     // Добавляет элемент в конец вектора
     // При нехватке места увеличивает вдвое вместимость вектора
     void PushBack(const Type& item) {
-        if (capacity_ == 0) {
-            ArrayPtr<Type> temp(1);
-            temp[0] = item;
-            temp.swap(simple_vector_);
-            ++size_;
-            ++capacity_;
-        }
-        else if (size_ < capacity_) {
-            simple_vector_[size_] = item;
-            ++size_;
-        }else {
-            ArrayPtr<Type> temp(capacity_ * 2);
-            std::copy(begin(), end(), temp.Get());
+        if (size_ >= capacity_) {
+            size_t new_capacity = (capacity_ == 0 ? 1 : capacity_ * 2);
+            ArrayPtr<Type> temp(new_capacity);
+            if (new_capacity > 1) {
+                std::copy(begin(), end(), temp.Get());
+            }
             temp[size_] = item;
             simple_vector_.swap(temp);
             ++size_;
-            capacity_ *= 2;
+            capacity_ = new_capacity;
+        }else {
+            simple_vector_[size_] = item;
+            ++size_;
         }
     }
 
     void PushBack(Type&& item) {
-        if (capacity_ == 0) {
-            ArrayPtr<Type> temp(1);
-            temp[0] = std::move(item);
-            temp.swap(simple_vector_);
-            ++size_;
-            ++capacity_;
-        }
-        else if (size_ < capacity_) {
-            simple_vector_[size_] = std::move(item);
-            ++size_;
-        }else {
-            ArrayPtr<Type> temp(capacity_ * 2);
-            std::move(std::make_move_iterator(begin()), std::make_move_iterator(end()), temp.Get());
+        if (size_ >= capacity_) {
+            size_t new_capacity = (capacity_ == 0 ? 1 : capacity_ * 2);
+            ArrayPtr<Type> temp(new_capacity);
+            if (new_capacity > 1) {
+                std::move(std::make_move_iterator(begin()), std::make_move_iterator(end()), temp.Get());
+            }
             temp[size_] = std::move(item);
             simple_vector_.swap(temp);
             ++size_;
-            capacity_ *= 2;
+            capacity_ = new_capacity;
+        }else {
+            simple_vector_[size_] = std::move(item);
+            ++size_;
         }
     }
 
@@ -138,62 +126,46 @@ public:
     // Возвращает итератор на вставленное значение
     // Если перед вставкой значения вектор был заполнен полностью,
     // вместимость вектора должна увеличиться вдвое, а для вектора вместимостью 0 стать равной 1
-    Iterator Insert(ConstIterator pos, const Type& value) {
+    Iterator Insert(ConstIterator pos, const Type& value) {      
         size_t new_pos = static_cast<size_t>(std::distance(cbegin(), pos));
-        if (size_ < capacity_) {
-            std::copy(begin() + new_pos, end(), begin() + new_pos + 1);
-            simple_vector_[new_pos] = value;
-            ++size_;
-            return &simple_vector_[new_pos];
-        }
-        else if (size_ == 0 && capacity_ == 0) {
-            ArrayPtr<Type> temp(1);
-            temp[0] = value;
-            simple_vector_.swap(temp);
-            ++size_;
-            ++capacity_;
-            return &simple_vector_[0];
-        }
-        else {
-            ArrayPtr<Type> temp(capacity_ * 2);
-            std::copy(begin(), begin() + new_pos, temp.Get());
-            std::copy(begin() + new_pos, end(), temp.Get() + new_pos + 1);
+        if (size_ >= capacity_) {
+            size_t new_capacity = (capacity_ == 0 ? 1 : capacity_ * 2);
+            ArrayPtr<Type> temp(new_capacity);
+            if (new_capacity > 1) {
+                std::copy(begin(), begin() + new_pos, temp.Get());
+                std::copy(begin() + new_pos, end(), temp.Get() + new_pos + 1);
+            }
             temp[new_pos] = value;
             simple_vector_.swap(temp);
             ++size_;
-            capacity_ *= 2;
-            return &simple_vector_[new_pos];
+            capacity_ = new_capacity;
+        }else {
+            std::copy(begin() + new_pos, end(), begin() + new_pos + 1);
+            simple_vector_[new_pos] = value;
+            ++size_;
         }
-        
+        return &simple_vector_[new_pos];               
     }
 
     Iterator Insert(ConstIterator pos, Type&& value) {
         size_t new_pos = static_cast<size_t>(std::distance(cbegin(), pos));
-        if (size_ < capacity_) {
-            std::move(std::make_move_iterator(begin() + new_pos), std::make_move_iterator(end()), begin() + new_pos + 1);
-            simple_vector_[new_pos] = std::move(value);
-            ++size_;
-            return &simple_vector_[new_pos];
-        }
-        else if (size_ == 0 && capacity_ == 0) {
-            ArrayPtr<Type> temp(1);
-            temp[0] = std::move(value);
-            simple_vector_.swap(temp);
-            ++size_;
-            ++capacity_;
-            return &simple_vector_[0];
-        }
-        else {
-            ArrayPtr<Type> temp(capacity_ * 2);
-            std::move(std::make_move_iterator(begin()), std::make_move_iterator(begin() + new_pos), temp.Get());
-            std::move(std::make_move_iterator(begin() + new_pos), std::make_move_iterator(end()), temp.Get() + new_pos + 1);
+        if (size_ >= capacity_) {
+            size_t new_capacity = (capacity_ == 0 ? 1 : capacity_ * 2);
+            ArrayPtr<Type> temp(new_capacity);
+            if (new_capacity > 1) {
+                std::move(std::make_move_iterator(begin()), std::make_move_iterator(begin() + new_pos), temp.Get());
+                std::move(std::make_move_iterator(begin() + new_pos), std::make_move_iterator(end()), temp.Get() + new_pos + 1);
+            }
             temp[new_pos] = std::move(value);
             simple_vector_.swap(temp);
             ++size_;
-            capacity_ *= 2;
-            return &simple_vector_[new_pos];
+            capacity_ = new_capacity;
+        }else {
+            std::move(std::make_move_iterator(begin() + new_pos), std::make_move_iterator(end()), begin() + new_pos + 1);
+            simple_vector_[new_pos] = std::move(value);
+            ++size_;
         }
-        
+        return &simple_vector_[new_pos];           
     }
 
     // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
@@ -369,21 +341,15 @@ inline bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& r
 
 template <typename Type>
 inline bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    if ((lhs < rhs) || (lhs == rhs)) {
-        return true;
-    }
-        return false;
+    return !(rhs < lhs);
 }
 
 template <typename Type>
 inline bool operator>(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return std::lexicographical_compare(rhs.begin(), rhs.end(), lhs.begin(), lhs.end());
+    return !(lhs <= rhs);
 }
 
 template <typename Type>
 inline bool operator>=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    if ((lhs > rhs) || (lhs == rhs)) {
-        return true;
-    }
-        return false;
-} 
+    return !(lhs < rhs);
+}               
